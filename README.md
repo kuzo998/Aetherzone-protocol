@@ -12,6 +12,24 @@ This repository holds the official, cryptographically verified smart contract se
 
 ---
 
+## 🏛️ Decentralized Governance & Timelock Verification
+
+To guarantee maximum user safety and eliminate single-point-of-failure administration, the AetherZone Protocol has placed all core smart contracts under the control of an on-chain Timelock.
+
+* **AetherTimelock Address:** [`0x332676075AB568a056b1CC178E9C84252A986a5D`](https://shidoscan.net/address/0x332676075AB568a056b1CC178E9C84252A986a5D#code)
+* **Delay Parameter:** **48 Hours** (Mandatory delay enforced on all structural updates)
+* **Emergency Operations:** Whitelisted instant pause capability for swift crisis response.
+
+### Deployed & Locked Contracts
+The following core contracts have transferred their full ownership to the `AetherTimelock` contract:
+1. **`AetherGuard`:** [`0xE77B8B211e2c95f125C0d3b2Aa17d56c74fa3660`](https://shidoscan.net/address/0xE77B8B211e2c95f125C0d3b2Aa17d56c74fa3660)
+2. **`RetailLimitOrders`:** [`0xF8048aBd73B2aBE02114A31e6F68B6C66bA98B18`](https://shidoscan.net/address/0xF8048aBd73B2aBE02114A31e6F68B6C66bA98B18)
+3. **`AetherOTCEscrow`:** [`0xDc812945b24E27BA5DBe17C71329a355Cd575239`](https://shidoscan.net/address/0xDc812945b24E27BA5DBe17C71329a355Cd575239)
+4. **`AetherRevenueDistributorV2`:** [`0xCC532A532857ad5CC0A1d6726062Acc75554344D`](https://shidoscan.net/address/0xCC532A532857ad5CC0A1d6726062Acc75554344D)
+5. **`AetherZap`:** [`0xB19f08512Eb6d256f85EcBe929e31baafB2c83DF`](https://shidoscan.net/address/0xB19f08512Eb6d256f85EcBe929e31baafB2c83DF)
+
+---
+
 ## 🔒 Intellectual Property & Proprietary Warning
 
 **All Rights Reserved.**
