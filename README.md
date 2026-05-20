@@ -4,10 +4,11 @@ This repository holds the official, cryptographically verified smart contract se
 
 ## 🛡️ Verified Security Audits
 
-| Document | Description | Verification Hash (SHA-256) |
+| Document | Description | IPFS Decentralized Link |
 | :--- | :--- | :--- |
-| **[Smart Contract Security Audit](audits/smart_contract_audit.md)** | Deep security analysis of all core swap routing, zapping, and limit order contracts. | See certificate |
-| **[Cryptographic Audit Certificate](audits/audit_certificate.md)** | Verified sign-off containing exact compilation hashes of the live Mainnet contracts. | Verified |
+| **[Smart Contract Security Audit](audits/smart_contract_audit.md)** | Deep security analysis of all core swap routing, zapping, and limit order contracts. | 🌐 **[IPFS Gateway Link](https://ipfs.io/ipfs/bafkreidxfxrmu4zxewnavkcbwznkikds7glnhhcjjd7qechtlrc44afjq4)** |
+| **[Cryptographic Audit Certificate](audits/audit_certificate.md)** | Verified sign-off containing exact compilation hashes of the live Mainnet contracts. | 🌐 **[IPFS Gateway Link](https://ipfs.io/ipfs/bafkreih6mcmyootey5ndemsezeqbhp25p5akdcjtut5zrwbwdfypuno4em)** |
+
 
 ---
 
