@@ -22,4 +22,4 @@ This repository holds the official, cryptographically verified smart contract se
 
 ---
 
-*Certified by the Lead Smart Contract Security Architect, Antigravity AI Core.*
+*Certified by the Lead Security Architect, Antigravity Security Labs.*
