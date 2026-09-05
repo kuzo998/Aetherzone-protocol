@@ -18,17 +18,17 @@ const CONTRACTS = [
   {
     name: 'StakePoolFactory',
     contractName: 'AetherStakeFactory.v6.sol:StakePoolFactory',
-    address: '0x04EA2C2A1aD9D6654bF145D8513255F25904549b',
+    address: '0x59eE0da93DE70A6bE9C597089Cc01A2a2f499085',
     standardJsonFile: 'verify-StakePoolFactory.standard.json',
     compilerVersion: 'v0.8.26+commit.8a97fa7a',
     runs: '200',
     evmVersion: 'paris',
-    constructorArgs: '000000000000000000000000480cf2fa782b6ed100db723b37861af78cbc0298'
+    constructorArgs: '000000000000000000000000edcf5c38bec4ea10fb2d67d3da03dd1f4086866f000000000000000000000000a17f1d96379d53b235587136f86880932c2b605f000000000000000000000000918937e3abed27ea8495fa09c1308c93b7749811000000000000000000000000918937e3abed27ea8495fa09c1308c93b7749811'
   },
   {
-    name: 'AetherStakePool',
+    name: 'AetherStakePool (Impl)',
     contractName: 'AetherStakeFactory.v6.sol:AetherStakePool',
-    address: '0x480cF2FA782b6ED100db723B37861aF78Cbc0298',
+    address: '0x34299BFcDB8da2EF8779Fb54a4d8d4716a3e77d3',
     standardJsonFile: 'verify-AetherStakePool.standard.json',
     compilerVersion: 'v0.8.26+commit.8a97fa7a',
     runs: '200',
@@ -48,12 +48,12 @@ const CONTRACTS = [
   {
     name: 'AetherReserveEscrow (Active)',
     contractName: 'AetherReserveEscrow.sol:AetherReserveEscrow',
-    address: '0xe6F851dBC99Dfad6d70c797AEf19BCDd22301b28',
+    address: '0x4AE8907e183DEfD989adF86529491627DE714B0e',
     standardJsonFile: 'verify-AetherReserveEscrow.standard.json',
     compilerVersion: 'v0.8.26+commit.8a97fa7a',
     runs: '200',
     evmVersion: 'paris',
-    constructorArgs: ''
+    constructorArgs: '000000000000000000000000edcf5c38bec4ea10fb2d67d3da03dd1f4086866f00000000000000000000000059ee0da93de70a6be9c597089cc01a2a2f499085000000000000000000000000918937e3abed27ea8495fa09c1308c93b7749811'
   },
   {
     name: 'AetherReserveEscrow (V1)',
