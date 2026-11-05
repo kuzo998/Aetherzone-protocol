@@ -121,7 +121,7 @@ contract AetherRevenueDistributorV2 {
         emit RevenueReceived(msg.sender, amount);
     }
 
-    function distribute() external nonReentrant whenNotPaused {
+    function distribute() external nonReentrant onlyOwner whenNotPaused {
         uint256 nativeBal = address(this).balance;
         if (nativeBal > 0) IWSHIDO(WSHIDO).deposit{value: nativeBal}();
 

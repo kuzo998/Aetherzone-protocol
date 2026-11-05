@@ -562,13 +562,13 @@ contract AetherZap {
     ) internal pure returns (uint256) {
         if (isToken0) {
             if (currentTick <= tickLower) return 0;    // all token0 needed
-            if (currentTick >= tickUpper) return amountIn / 2; // all token1 needed - convert all
+            if (currentTick >= tickUpper) return amountIn; // all token1 needed - convert all
             int24 rangeW = tickUpper - tickLower;
             uint256 t1Frac = uint256(uint24(currentTick - tickLower)) * BPS_BASE / uint256(uint24(rangeW));
             return (amountIn * t1Frac) / (BPS_BASE + t1Frac);
         } else {
             if (currentTick >= tickUpper) return 0;    // all token1 needed
-            if (currentTick <= tickLower) return amountIn / 2; // all token0 needed
+            if (currentTick <= tickLower) return amountIn; // all token0 needed
             int24 rangeW = tickUpper - tickLower;
             uint256 t0Frac = BPS_BASE - (uint256(uint24(currentTick - tickLower)) * BPS_BASE / uint256(uint24(rangeW)));
             return (amountIn * t0Frac) / (BPS_BASE + t0Frac);

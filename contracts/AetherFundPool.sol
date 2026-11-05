@@ -1,37 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-// ════════════════════════════════════════════════════════════════════════════
-// AetherFundPool.sol v1.0
+// ????????????????????????????????????????????????????????????????????????????
+// AetherFundPool.sol v2.0 (Security & Solvency Hardened)
 //
-// HOW IT WORKS:
-//   Admin creates project: token, targetAmount, softCap, milestones[], deadline.
-//   Contributors deposit tokens - locked in this contract.
-//   IF softCap reached: admin can release milestones one by one to beneficiary.
-//   IF deadline passed and softCap not reached: contributors can claim full refund.
-//   IF admin cancels: contributors can always claim full refund.
-//
-// SECURITY PROPERTIES:
-//   - All contributions locked on-chain - admin can't access directly.
-//   - raisedAmount is computed from actual on-chain deposits - can't be faked.
-//   - Contributors can ALWAYS get refunds if project fails or is cancelled.
-//   - Milestones must be released in order - no skipping.
-//   - softCap enforced: no milestone released until minimum is reached.
-//   - Each milestone has its own amount - prevents single lump-sum grab.
-//
-// EXAMPLE:
-//   Admin creates project:
-//     token=USDC, targetAmount=100,000, softCap=30,000, deadline=90days
-//     milestones=[30000, 40000, 30000] = 3 phases
-//
-//   100 contributors deposit varying amounts.
-//   Total raised: 85,000 USDC (above softCap of 30,000).
-//
-//   Admin releases milestone 0: 30,000 USDC -> beneficiary.
-//   Admin releases milestone 1: 40,000 USDC -> beneficiary.
-//   15,000 USDC remains locked (milestone 2 needs 30,000 but only 15,000 left).
-//   Remaining contributors can claim refund for the unfulfilled portion.
-// ════════════════════════════════════════════════════════════════════════════
+// SECURITY HARDENING HIGHLIGHTS:
+//   - Pro-rata solvency protection on project cancellation post-milestone.
+//   - Cumulative refund accounting: partial refunds properly offset available milestone funds.
+//   - Milestone releases strictly prohibited after campaign deadline passes.
+//   - Mandatory future deadline on creation; no perpetual zero-deadline fund traps.
+//   - Deadline extensions disallowed once expired or once refunds have initiated.
+//   - Beneficiary address immutable once contributions commence.
+//   - Non-custodial guarantee: rescueTokens cannot sweep locked user campaign deposits.
+// ????????????????????????????????????????????????????????????????????????????
 
 interface IERC20 {
     function balanceOf(address) external view returns (uint256);
@@ -41,7 +22,7 @@ interface IERC20 {
 
 contract AetherFundPool {
 
-    // ─── Config ───────────────────────────────────────────────────────────────
+    // ??? Config ???????????????????????????????????????????????????????????????
 
     address public owner;
     address public admin;         // AetherZone admin (ADMIN_ADDRESS from communityService.ts)
@@ -56,7 +37,10 @@ contract AetherFundPool {
     uint256 public constant MAX_FEE = 500;  // 5% hard cap
     uint256 public constant BPS_BASE = 10000;
 
-    // ─── Project ──────────────────────────────────────────────────────────────
+    // Total campaign deposits currently locked for active/funded campaigns
+    mapping(address => uint256) public lockedTokenBalance;
+
+    // ??? Project ??????????????????????????????????????????????????????????????
 
     enum ProjectStatus { Active, Funded, Cancelled }
 
@@ -76,6 +60,7 @@ contract AetherFundPool {
         address       beneficiary;
         uint256       raised;
         uint256       released;
+        uint256       totalRefunded;
         uint256       deadline;
         uint256       minContribution;
         ProjectStatus status;
@@ -89,7 +74,7 @@ contract AetherFundPool {
     mapping(uint256 => address[]) public contributors;
     mapping(uint256 => mapping(address => bool)) public refunded;
 
-    // ─── Events ───────────────────────────────────────────────────────────────
+    // ??? Events ???????????????????????????????????????????????????????????????
 
     event ProjectCreated(uint256 indexed projectId, string title, address token, uint256 targetAmount, uint256 softCap, address beneficiary, uint256 deadline);
     event Contributed(uint256 indexed projectId, address indexed contributor, uint256 amount, uint256 totalRaised);
@@ -98,21 +83,21 @@ contract AetherFundPool {
     event ProjectCancelled(uint256 indexed projectId);
     event ProjectMarkedFunded(uint256 indexed projectId);
 
-    // ─── Modifiers ────────────────────────────────────────────────────────────
+    // ??? Modifiers ????????????????????????????????????????????????????????????
 
     modifier onlyOwner()     { require(msg.sender == owner || msg.sender == admin, "FP: Not admin"); _; }
     modifier nonReentrant()  { require(_lock == 0, "FP: Reentrant"); _lock = 1; _; _lock = 0; }
     modifier whenNotPaused() { require(!paused, "FP: Paused"); _; }
 
-    // ─── Constructor ──────────────────────────────────────────────────────────
+    // ??? Constructor ??????????????????????????????????????????????????????????
 
     constructor(address _admin, address _feeRecipient) {
         owner        = msg.sender;
-        admin        = _admin;        // 0x918937e3abed27ea8495fa09c1308c93b7749811
-        feeRecipient = _feeRecipient; // AetherRevenueDistributor
+        admin        = _admin;
+        feeRecipient = _feeRecipient;
     }
 
-    // ─── createProject (admin only) ───────────────────────────────────────────
+    // ??? createProject (admin only) ???????????????????????????????????????????
 
     function createProject(
         string calldata title,
@@ -131,7 +116,7 @@ contract AetherFundPool {
         require(beneficiary != address(0), "FP: Zero beneficiary");
         require(milestoneTitles.length == milestoneAmounts.length, "FP: Milestone length mismatch");
         require(milestoneTitles.length > 0, "FP: No milestones");
-        require(deadline == 0 || deadline > block.timestamp, "FP: Deadline passed");
+        require(deadline > block.timestamp, "FP: Deadline required in future");
         require(softCap <= targetAmount,   "FP: SoftCap > target");
 
         uint256 milestoneSum;
@@ -166,7 +151,7 @@ contract AetherFundPool {
         emit ProjectCreated(projectId, title, token, targetAmount, softCap, beneficiary, deadline);
     }
 
-    // ─── contribute ───────────────────────────────────────────────────────────
+    // ??? contribute ???????????????????????????????????????????????????????????
 
     function contribute(uint256 projectId, uint256 amount) external nonReentrant whenNotPaused {
         Project storage p = projects[projectId];
@@ -174,7 +159,7 @@ contract AetherFundPool {
         require(p.status == ProjectStatus.Active,  "FP: Project not active");
         require(amount > 0,                        "FP: Zero amount");
         require(p.minContribution == 0 || amount >= p.minContribution, "FP: Below minimum");
-        require(p.deadline == 0 || block.timestamp <= p.deadline, "FP: Deadline passed");
+        require(block.timestamp <= p.deadline,     "FP: Deadline passed");
 
         uint256 remaining = p.targetAmount > p.raised ? p.targetAmount - p.raised : 0;
         require(remaining > 0, "FP: Target already reached");
@@ -190,6 +175,7 @@ contract AetherFundPool {
         }
         contributions[projectId][msg.sender] += received;
         p.raised += received;
+        lockedTokenBalance[p.token] += received;
 
         if (p.raised >= p.targetAmount && p.status == ProjectStatus.Active) {
             p.status = ProjectStatus.Funded;
@@ -199,12 +185,13 @@ contract AetherFundPool {
         emit Contributed(projectId, msg.sender, received, p.raised);
     }
 
-    // ─── releaseMilestone (admin only) ────────────────────────────────────────
+    // ??? releaseMilestone (admin only) ????????????????????????????????????????
 
     function releaseMilestone(uint256 projectId, uint256 milestoneIndex) external nonReentrant onlyOwner {
         Project storage p = projects[projectId];
         require(p.createdAt > 0, "FP: Project not found");
         require(p.status == ProjectStatus.Active || p.status == ProjectStatus.Funded, "FP: Project not active");
+        require(block.timestamp <= p.deadline, "FP: Deadline passed");
         require(milestoneIndex < p.milestones.length, "FP: Invalid milestone");
 
         for (uint256 i; i < milestoneIndex; i++) {
@@ -215,14 +202,15 @@ contract AetherFundPool {
         require(!m.released, "FP: Already released");
         require(p.raised >= p.softCap || p.softCap == 0, "FP: SoftCap not reached");
 
-        uint256 available = p.raised - p.released;
+        uint256 consumed = p.released + p.totalRefunded;
+        uint256 available = p.raised > consumed ? p.raised - consumed : 0;
         require(m.amount <= available, "FP: Insufficient funds for milestone");
 
         m.released   = true;
         m.releasedAt = uint64(block.timestamp);
         p.released  += m.amount;
+        lockedTokenBalance[p.token] = lockedTokenBalance[p.token] >= m.amount ? lockedTokenBalance[p.token] - m.amount : 0;
 
-        // Platform fee (2% default) taken from milestone before sending to beneficiary
         uint256 platformFee   = (m.amount * platformFeeBps) / BPS_BASE;
         uint256 toBeneficiary = m.amount - platformFee;
 
@@ -233,7 +221,7 @@ contract AetherFundPool {
         emit MilestoneReleased(projectId, milestoneIndex, toBeneficiary, platformFee, p.beneficiary);
     }
 
-    // ─── claimRefund ──────────────────────────────────────────────────────────
+    // ??? claimRefund ??????????????????????????????????????????????????????????
 
     function claimRefund(uint256 projectId) external nonReentrant {
         Project storage p = projects[projectId];
@@ -246,16 +234,18 @@ contract AetherFundPool {
         bool canRefund = false;
         uint256 refundAmount;
 
+        uint256 consumed = p.released + p.totalRefunded;
+        uint256 unreleasedPool = p.raised > consumed ? p.raised - consumed : 0;
+
         if (p.status == ProjectStatus.Cancelled) {
             canRefund    = true;
-            refundAmount = contributed;
+            refundAmount = p.raised > 0 ? (contributed * unreleasedPool) / p.raised : 0;
         } else if (p.deadline > 0 && block.timestamp > p.deadline && p.raised < p.softCap) {
             canRefund    = true;
             refundAmount = contributed;
         } else if (p.deadline > 0 && block.timestamp > p.deadline && p.raised >= p.softCap) {
-            uint256 unreleasedPool = p.raised - p.released;
             if (unreleasedPool > 0) {
-                refundAmount = (contributed * unreleasedPool) / p.raised;
+                refundAmount = p.raised > 0 ? (contributed * unreleasedPool) / p.raised : 0;
                 canRefund    = refundAmount > 0;
             }
         }
@@ -264,11 +254,14 @@ contract AetherFundPool {
         require(refundAmount > 0, "FP: Zero refund");
 
         refunded[projectId][msg.sender] = true;
+        p.totalRefunded += refundAmount;
+        lockedTokenBalance[p.token] = lockedTokenBalance[p.token] >= refundAmount ? lockedTokenBalance[p.token] - refundAmount : 0;
+
         require(IERC20(p.token).transfer(msg.sender, refundAmount), "FP: Refund failed");
         emit Refunded(projectId, msg.sender, refundAmount);
     }
 
-    // ─── Admin Functions ──────────────────────────────────────────────────────
+    // ??? Admin Functions ??????????????????????????????????????????????????????
 
     function cancelProject(uint256 projectId) external onlyOwner {
         Project storage p = projects[projectId];
@@ -279,16 +272,23 @@ contract AetherFundPool {
     }
 
     function updateBeneficiary(uint256 projectId, address newBeneficiary) external onlyOwner {
-        require(newBeneficiary != address(0));
-        projects[projectId].beneficiary = newBeneficiary;
+        require(newBeneficiary != address(0), "FP: Zero address");
+        Project storage p = projects[projectId];
+        require(p.raised == 0, "FP: Cannot change beneficiary after funds raised");
+        p.beneficiary = newBeneficiary;
     }
 
     function extendDeadline(uint256 projectId, uint256 newDeadline) external onlyOwner {
-        require(newDeadline > block.timestamp, "FP: Deadline in past");
-        projects[projectId].deadline = newDeadline;
+        Project storage p = projects[projectId];
+        require(p.createdAt > 0, "FP: Not found");
+        require(p.status == ProjectStatus.Active, "FP: Project not active");
+        require(block.timestamp <= p.deadline, "FP: Current deadline expired");
+        require(p.totalRefunded == 0, "FP: Refunds already processed");
+        require(newDeadline > p.deadline, "FP: New deadline must be later");
+        p.deadline = newDeadline;
     }
 
-    // ─── Views ────────────────────────────────────────────────────────────────
+    // ??? Views ????????????????????????????????????????????????????????????????
 
     function getProject(uint256 projectId) external view returns (
         uint256 id, string memory title, address token,
@@ -299,6 +299,10 @@ contract AetherFundPool {
         Project storage p = projects[projectId];
         return (p.id, p.title, p.token, p.targetAmount, p.softCap, p.beneficiary,
                 p.raised, p.released, p.deadline, p.status, p.createdAt, p.milestones.length);
+    }
+
+    function getProjectTotalRefunded(uint256 projectId) external view returns (uint256) {
+        return projects[projectId].totalRefunded;
     }
 
     function getMilestone(uint256 projectId, uint256 milestoneIndex) external view returns (
@@ -332,26 +336,37 @@ contract AetherFundPool {
         uint256 contributed = contributions[projectId][contributor];
         if (contributed == 0) return (false, 0, "No contribution");
 
+        uint256 consumed = p.released + p.totalRefunded;
+        uint256 unreleased = p.raised > consumed ? p.raised - consumed : 0;
+
         if (p.status == ProjectStatus.Cancelled) {
-            return (true, contributed, "Project cancelled");
+            uint256 refundAmt = p.raised > 0 ? (contributed * unreleased) / p.raised : 0;
+            return (refundAmt > 0, refundAmt, "Project cancelled: unreleased funds");
         }
         if (p.deadline > 0 && block.timestamp > p.deadline && p.raised < p.softCap) {
             return (true, contributed, "SoftCap not reached after deadline");
         }
         if (p.deadline > 0 && block.timestamp > p.deadline && p.raised >= p.softCap) {
-            uint256 unreleased = p.raised - p.released;
-            uint256 refundAmt  = unreleased > 0 ? (contributed * unreleased) / p.raised : 0;
+            uint256 refundAmt  = p.raised > 0 ? (contributed * unreleased) / p.raised : 0;
             return (refundAmt > 0, refundAmt, "Partial refund: unreleased funds");
         }
         return (false, 0, "Project active - refund not yet available");
     }
 
-    // ─── Admin Config ─────────────────────────────────────────────────────────
+    // ??? Admin Config ?????????????????????????????????????????????????????????
 
     function setAdmin(address _admin) external { require(msg.sender == owner); admin = _admin; }
     function setFeeRecipient(address r) external { require(msg.sender == owner && r != address(0)); feeRecipient = r; }
     function setPlatformFee(uint256 _bps) external { require(msg.sender == owner && _bps <= MAX_FEE, "FP: Fee too high"); platformFeeBps = _bps; }
     function setPaused(bool _p) external { require(msg.sender == owner || msg.sender == admin); paused = _p; }
     function transferOwnership(address n) external { require(msg.sender == owner && n != address(0)); owner = n; }
-    function rescueTokens(address t, uint256 a) external { require(msg.sender == owner); IERC20(t).transfer(owner, a); }
+
+    function rescueTokens(address t, uint256 a) external {
+        require(msg.sender == owner, "FP: Not owner");
+        uint256 currentBal = IERC20(t).balanceOf(address(this));
+        uint256 locked = lockedTokenBalance[t];
+        uint256 withdrawable = currentBal > locked ? currentBal - locked : 0;
+        require(a <= withdrawable, "FP: Cannot rescue locked user deposits");
+        IERC20(t).transfer(owner, a);
+    }
 }

@@ -358,6 +358,11 @@ contract WhaleLimitOrders {
         require(o.status == OrderStatus.Open, "WO: Not open");
         require(msg.sender == bot || msg.sender == o.owner, "WO: Not authorized");
 
+        if (msg.sender == bot) {
+            (bool filled, , , ) = this.isOrderFilled(tokenId);
+            require(filled || block.timestamp > o.deadline, "WO: Not yet filled");
+        }
+
         // ── Handle expiry: full refund, no revenue ────────────────────────────
         if (block.timestamp > o.deadline) {
             uint256 expiredOutBefore = IERC20(o.tokenOut).balanceOf(address(this));

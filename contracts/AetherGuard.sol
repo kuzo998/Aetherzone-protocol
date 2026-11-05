@@ -160,11 +160,6 @@ contract AetherGuard {
         // TWAP check - detect price manipulation
         _validateTwap(pool);
 
-        // Enforce slippage hard cap
-        uint256 impliedSlippage = minAmountOut == 0 ? BPS_BASE :
-            BPS_BASE - (minAmountOut * BPS_BASE / amountIn); // rough estimate
-        require(impliedSlippage <= maxSlippageBps, "AG: Slippage exceeds cap");
-
         // Pull tokens from caller
         uint256 before = IERC20(tokenIn).balanceOf(address(this));
         require(IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn), "AG: Pull failed");

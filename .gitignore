@@ -1,0 +1,7 @@
+node_modules/
+*.js
+contracts/*.json
+package.json
+package-lock.json
+cache/
+artifacts/
